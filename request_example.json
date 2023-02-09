@@ -1,0 +1,26 @@
+{
+    "current": {
+        "start": 1675976400,
+        "end": 1675980000,
+        "readableDate_start": "2023-02-09 21:00:00",
+        "readableDate_end": "2023-02-09 22:00:00",
+        "map": "World's Edge",
+        "code": "worlds_edge_rotation",
+        "DurationInSecs": 3600,
+        "DurationInMinutes": 60,
+        "asset": "https://apexlegendsstatus.com/assets/maps/Worlds_Edge.png",
+        "remainingSecs": 1852,
+        "remainingMins": 31,
+        "remainingTimer": "00:30:52"
+    },
+    "next": {
+        "start": 1675980000,
+        "end": 1675985400,
+        "readableDate_start": "2023-02-09 22:00:00",
+        "readableDate_end": "2023-02-09 23:30:00",
+        "map": "Broken Moon",
+        "code": "broken_moon_rotation",
+        "DurationInSecs": 5400,
+        "DurationInMinutes": 90
+    }
+}
