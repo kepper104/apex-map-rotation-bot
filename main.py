@@ -6,75 +6,57 @@ import asyncio
 from requests import get
 from TOKEN import discord_key, als_key
 from datetime import datetime
-from pytz import timezone
+from pytz import timezone, all_timezones
+
+# --------- Configuration ---------
+update_message = False
+time_zone = "UTC"
+update_frequency_seconds = 4
+# --------- Configuration ---------
 
 intents = discord.Intents.default()
 intents.message_content = True
-
 bot = commands.Bot(intents=intents, command_prefix='!')
 
+info_message = None
 
-def to_MSC(time_str):
+
+def convert_time(time_str):
     time_utc = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
 
     utc_tz = timezone("UTC")
     time_utc = utc_tz.localize(time_utc)
 
-    moscow_tz = timezone("Europe/Moscow")
-    time_moscow = time_utc.astimezone(moscow_tz)
+    converted_tz = timezone(time_zone)
+    converted_time = time_utc.astimezone(converted_tz)
 
-    return time_moscow.strftime("%Y-%m-%d %H:%M:%S")
-
-
-@bot.event
-async def on_ready():
-    logger.info(f'We have logged in as {bot.user}')
-
-
-@bot.command()
-async def init_status(ctx):
-    logger.info("Status Message Initiated")
-    message = await ctx.send("This is a status message")
-    await ctx.message.delete()
-
-    while True:
-        request = await get_data()
-        # logger.info("Updating Data")
-
-        if request is None:
-            logger.warning("Redoing Request in 5 Seconds")
-            await asyncio.sleep(5)
-            continue
-
-        game_activity_string = construct_status_string(request)
-        report_string = construct_report_string(request)
-
-        await message.edit(content=report_string)
-        await update_status(game_activity_string)
-
-        await asyncio.sleep(0.5)
-
-
-async def update_status(new_status):
-
-    status = discord.Game(new_status)
-
-    await bot.change_presence(activity=status)
+    return converted_time.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def construct_report_string(res):
-    time_utc_start = res['current']['readableDate_start'].split()
-    time_utc_end = res['current']['readableDate_end'].split()
-    map = res['current']['map']
+    current_start_time = res['current']['readableDate_start'].split()
+    current_end_time = res['current']['readableDate_end'].split()
+    current_map = res['current']['map']
     remaining = res['current']['remainingTimer']
-    next_map = res['next']['map']
-    time_msc_start = to_MSC(" ".join(time_utc_start)).split()
-    time_msc_end = to_MSC(" ".join(time_utc_end)).split()
-    result = f"From  {time_utc_start[1]}  UTC ({time_msc_start[1]} MSK)\nTo       {time_utc_end[1]}  UTC ({time_msc_end[1]} MSK)\nThe map is {map}\n{remaining} remains until {next_map}"
 
-    # print("----------START-REPORT----------")
-    # print(result)
-    # print("----------END---REPORT----------")
+    next_start_time = res['next']['readableDate_start'].split()
+    next_end_time = res['next']['readableDate_end'].split()
+    next_map = res['next']['map']
+    next_duration = res['next']['DurationInMinutes']
+
+    if time_zone != "UTC":
+        current_start_time = convert_time(" ".join(current_start_time)).split()
+        current_end_time = convert_time(" ".join(current_end_time)).split()
+        next_start_time = convert_time(" ".join(next_start_time)).split()
+        next_end_time = convert_time(" ".join(next_end_time)).split()
+
+    result = f"The map is `{current_map}` for `{remaining}`\n" \
+             f"\tFrom  {current_start_time[1]}\n" \
+             f"\tTo       {current_end_time[1]}\n" \
+             f"The next map will be `{next_map}` for `{next_duration} minutes`:\n" \
+             f"\tFrom  {next_start_time[1]}\n" \
+             f"\tTo       {next_end_time[1]}\n" \
+             f"Used timezone is {time_zone}"
 
     return result
 
@@ -86,22 +68,69 @@ def construct_status_string(res):
     return res_str
 
 
+@bot.event
+async def on_ready():
+    logger.info(f'We have logged in as {bot.user}')
+    while True:
+        try:
+            await update()
+            await asyncio.sleep(update_frequency_seconds)
+        except Exception:
+            await asyncio.sleep(update_frequency_seconds + 7)
+
+
+async def update():
+    request = await get_data()
+    if request is None:
+        logger.error(f"Request Unsuccessful! Trying again in {update_frequency_seconds + 5} Seconds")
+        await asyncio.sleep(update_frequency_seconds + 5)
+        return
+    game_activity_string = construct_status_string(request)
+    report_string = construct_report_string(request)
+
+    if info_message is not None:
+        await info_message.edit(content=report_string)
+
+    await update_status(game_activity_string)
+
+
+@bot.command()
+async def init_status(ctx):
+    global info_message
+    if info_message is not None:
+        await info_message.delete()
+        logger.info("Old Status Message Deleted")
+
+    info_message = await ctx.send("Moving the Status Message Here!")
+    logger.info("Status Message Initiated")
+
+    await ctx.message.delete()
+
+
+async def update_status(new_status):
+
+    status = discord.Game(new_status)
+
+    await bot.change_presence(activity=status)
+
+
 async def get_data():
     res = get(
-        f'https://api.mozambiquehe.re/maprotation?auth={als_key}').json()
-    try:
-        test = res['current']
-    except TypeError:
-        logger.error("Type Error")
-        pass
-    except KeyError:
-        logger.error("Request is Throttling")
-        res = None
-    return res
+        f'https://api.mozambiquehe.re/maprotation?auth={als_key}')
+    if "Error" in res.json().keys():
+        logger.error(res.json()["Error"])
+        if "Slow down" in res.json()["Error"]:
+            logger.error("You should try lowering your update frequency, values under 1 second are not recommended!")
+        return None
+    elif res.status_code != 200:
+        logger.error(f"Error Response Code from Apex Legends Status API: {res.status_code}")
+        logger.error(res.json())
+        return None
+
+    return res.json()
 
 
 if __name__ == "__main__":
-
     # Setting Up Logging
     logger = logging.getLogger('discord')
     logger.setLevel(logging.INFO)
@@ -111,5 +140,11 @@ if __name__ == "__main__":
     formatter = ColourFormatter()
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+
+    if time_zone not in all_timezones:
+        logger.critical("Couldn't find a timezone with specified name!")
+        logger.critical("The program will now print all available timezones and exit.")
+        logger.critical(all_timezones)
+        exit(-1)
 
     bot.run(discord_key, log_handler=None)
