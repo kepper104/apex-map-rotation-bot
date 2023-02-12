@@ -44,6 +44,8 @@ def construct_report_string(res):
     next_map = res['next']['map']
     next_duration = res['next']['DurationInMinutes']
 
+    current_time = str(datetime.now(timezone(time_zone))).split('.')[0]
+
     if time_zone != "UTC":
         current_start_time = convert_time(" ".join(current_start_time)).split()
         current_end_time = convert_time(" ".join(current_end_time)).split()
@@ -56,7 +58,8 @@ def construct_report_string(res):
              f"The next map will be `{next_map}` for `{next_duration} minutes`:\n" \
              f"\tFrom  {next_start_time[1]}\n" \
              f"\tTo       {next_end_time[1]}\n" \
-             f"Used timezone is {time_zone}"
+             f"Used timezone is {time_zone}\n" \
+             f"Last updated `{current_time}`"
 
     return result
 
