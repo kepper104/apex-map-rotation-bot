@@ -20,6 +20,7 @@ bot = commands.Bot(intents=intents, command_prefix='!')
 
 info_message = None
 
+start_time = None
 
 def convert_time(time_str):
     time_utc = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
@@ -59,7 +60,8 @@ def construct_report_string(res):
              f"\tFrom  {next_start_time[1]}\n" \
              f"\tTo       {next_end_time[1]}\n" \
              f"Used timezone is {time_zone}\n" \
-             f"Last updated `{current_time}`"
+             f"Last updated `{current_time}\n`" \
+             f"Bot has been running since `{start_time}`"
 
     return result
 
@@ -73,7 +75,10 @@ def construct_status_string(res):
 
 @bot.event
 async def on_ready():
+    global start_time
     logger.info(f'We have logged in as {bot.user}')
+    start_time = str(datetime.now(timezone(time_zone))).split('.')[0]
+
     while True:
         try:
             await update()
